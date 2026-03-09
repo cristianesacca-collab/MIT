@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bouncing Balls</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+      font-family: Arial, sans-serif;
+      color: #eee;
+    }
+    h1 {
+      margin-bottom: 12px;
+      font-size: 1.4rem;
+      letter-spacing: 1px;
+    }
+    #controls {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      background: #e94560;
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #c73652;
+    }
+    #info {
+      font-size: 0.85rem;
+      opacity: 0.7;
+    }
+    canvas {
+      border: 3px solid #e94560;
+      border-radius: 4px;
+      background: #16213e;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bouncing Balls</h1>
+  <div id="controls">
+    <button id="addBtn">Add Ball</button>
+    <span id="info">Click inside the box to add a ball, or use the button.</span>
+  </div>
+  <canvas id="canvas" width="700" height="500"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const BALL_RADIUS = 15;
+    const MIN_SPEED = 2;
+    const MAX_SPEED = 5;
+    const COLORS = [
+      '#e94560', '#0f3460', '#53d8fb', '#f5a623',
+      '#7ed321', '#bd10e0', '#ff6b6b', '#4ecdc4'
+    ];
+
+    let balls = [];
+
+    function randomBetween(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function randomVelocityComponent() {
+      const speed = randomBetween(MIN_SPEED, MAX_SPEED);
+      return Math.random() < 0.5 ? speed : -speed;
+    }
+
+    function createBall(x, y) {
+      return {
+        x: x !== undefined ? x : randomBetween(BALL_RADIUS, canvas.width - BALL_RADIUS),
+        y: y !== undefined ? y : randomBetween(BALL_RADIUS, canvas.height - BALL_RADIUS),
+        vx: randomVelocityComponent(),
+        vy: randomVelocityComponent(),
+        radius: BALL_RADIUS,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)]
+      };
+    }
+
+    // Resolve overlap between two balls so they don't stick together
+    function resolveOverlap(a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = a.radius + b.radius;
+      if (dist === 0) return;
+      const overlap = (minDist - dist) / 2;
+      const nx = dx / dist;
+      const ny = dy / dist;
+      a.x -= nx * overlap;
+      a.y -= ny * overlap;
+      b.x += nx * overlap;
+      b.y += ny * overlap;
+    }
+
+    // Elastic collision between two equal-mass balls
+    function collideBalls(a, b) {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = a.radius + b.radius;
+
+      if (dist >= minDist || dist === 0) return;
+
+      // Normal vector
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      // Relative velocity along the normal
+      const dvx = a.vx - b.vx;
+      const dvy = a.vy - b.vy;
+      const dvn = dvx * nx + dvy * ny;
+
+      // Only resolve if balls are approaching each other
+      if (dvn <= 0) return;
+
+      // Exchange velocity components along the normal (equal mass)
+      a.vx -= dvn * nx;
+      a.vy -= dvn * ny;
+      b.vx += dvn * nx;
+      b.vy += dvn * ny;
+
+      resolveOverlap(a, b);
+    }
+
+    function update() {
+      for (const ball of balls) {
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+
+        // Wall collisions
+        if (ball.x - ball.radius < 0) {
+          ball.x = ball.radius;
+          ball.vx = Math.abs(ball.vx);
+        } else if (ball.x + ball.radius > canvas.width) {
+          ball.x = canvas.width - ball.radius;
+          ball.vx = -Math.abs(ball.vx);
+        }
+
+        if (ball.y - ball.radius < 0) {
+          ball.y = ball.radius;
+          ball.vy = Math.abs(ball.vy);
+        } else if (ball.y + ball.radius > canvas.height) {
+          ball.y = canvas.height - ball.radius;
+          ball.vy = -Math.abs(ball.vy);
+        }
+      }
+
+      // Ball-to-ball collisions
+      for (let i = 0; i < balls.length; i++) {
+        for (let j = i + 1; j < balls.length; j++) {
+          collideBalls(balls[i], balls[j]);
+        }
+      }
+    }
+
+    function drawBall(ball) {
+      // Gradient shading for a 3-D look
+      const gradient = ctx.createRadialGradient(
+        ball.x - ball.radius * 0.3,
+        ball.y - ball.radius * 0.3,
+        ball.radius * 0.1,
+        ball.x,
+        ball.y,
+        ball.radius
+      );
+      gradient.addColorStop(0, '#ffffff88');
+      gradient.addColorStop(1, ball.color);
+
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const ball of balls) {
+        drawBall(ball);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Add a ball via button
+    document.getElementById('addBtn').addEventListener('click', () => {
+      balls.push(createBall());
+    });
+
+    // Add a ball by clicking on the canvas
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Clamp so ball stays inside the box
+      const cx = Math.max(BALL_RADIUS, Math.min(canvas.width - BALL_RADIUS, x));
+      const cy = Math.max(BALL_RADIUS, Math.min(canvas.height - BALL_RADIUS, y));
+      balls.push(createBall(cx, cy));
+    });
+
+    // Start with a few balls
+    for (let i = 0; i < 5; i++) {
+      balls.push(createBall());
+    }
+
+    loop();
+  </script>
+</body>
+</html>
